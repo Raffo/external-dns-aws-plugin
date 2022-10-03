@@ -14,7 +14,6 @@ type AWSPlugin struct {
 }
 
 func (p *AWSPlugin) awsProviderHandler(w http.ResponseWriter, req *http.Request) {
-	log.Println("much request")
 	if req.Method == http.MethodGet { // records
 		log.Println("get records")
 		records, err := p.provider.Records(context.Background())
