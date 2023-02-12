@@ -6,11 +6,22 @@ import (
 	"log"
 	"net/http"
 
+	"sigs.k8s.io/external-dns/endpoint"
 	"sigs.k8s.io/external-dns/plan"
 )
 
 type AWSPlugin struct {
 	provider *AWSProvider
+}
+
+type PropertyValuesEqualsRequest struct {
+	Name     string `json:"name"`
+	Previous string `json:"previous"`
+	Current  string `json:"current"`
+}
+
+type PropertiesValuesEqualsResponse struct {
+	Equals bool `json:"equals"`
 }
 
 func (p *AWSPlugin) awsProviderHandler(w http.ResponseWriter, req *http.Request) {
@@ -46,6 +57,37 @@ func (p *AWSPlugin) awsProviderHandler(w http.ResponseWriter, req *http.Request)
 	log.Println("this should never happen")
 }
 
+func (p *AWSPlugin) propertyValuesEquals(w http.ResponseWriter, req *http.Request) {
+	if req.Method == http.MethodGet { // propertyValuesEquals
+		pve := PropertyValuesEqualsRequest{}
+		if err := json.NewDecoder(req.Body).Decode(&pve); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		b := p.provider.PropertyValuesEqual(pve.Name, pve.Previous, pve.Current)
+		r := PropertiesValuesEqualsResponse{
+			Equals: b,
+		}
+		out, _ := json.Marshal(&r)
+		w.Write(out)
+	}
+
+}
+
+func (p *AWSPlugin) adjustEndpoints(w http.ResponseWriter, req *http.Request) {
+	if req.Method == http.MethodGet { // propertyValuesEquals
+		pve := []*endpoint.Endpoint{}
+		if err := json.NewDecoder(req.Body).Decode(&pve); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		pve = p.provider.AdjustEndpoints(pve)
+		out, _ := json.Marshal(&pve)
+		w.Write(out)
+	}
+
+}
+
 func main() {
 	// instantiate the config
 	config := AWSConfig{} // TODO populate the config
@@ -61,7 +103,9 @@ func main() {
 	}
 
 	m := http.NewServeMux()
-	m.HandleFunc("/", p.awsProviderHandler)
+	m.HandleFunc("/records", p.awsProviderHandler)
+	m.HandleFunc("/propertyvaluesequals", p.propertyValuesEquals)
+	m.HandleFunc("/adjustendpoints", p.adjustEndpoints)
 	if err := http.ListenAndServe(":8888", m); err != nil {
 		log.Fatal(err)
 	}
